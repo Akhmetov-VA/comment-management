@@ -27,6 +27,7 @@ services:
     environment:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=elastic
+      - xpack.security.enabled=false
     ports:
       - "9200:9200"
       - "9300:9300"
