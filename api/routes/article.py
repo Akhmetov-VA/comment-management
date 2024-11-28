@@ -90,24 +90,46 @@ async def create_article(article: Article):
 
 @router.post("/create_article_from_excel")
 async def create_article_from_excel(excel_file: UploadFile) -> JSONResponse:
-    article_title, article_author = (
-        excel_file.filename.split("_")[0],
-        excel_file.filename.split("_")[1].split(".")[0],
-    )
+    try:
+        # Убираем расширение и разбираем имя файла
+        file_basename = excel_file.filename.rsplit(".", 1)[0]
+        parts = file_basename.split("-")
+
+        if len(parts) < 3:
+            raise ValueError(
+                "Filename format must be 'название-автор-переводчик.xlsx'"
+            )
+
+        article_title = parts[0]
+        article_author = parts[1]
+        article_translator = "-".join(parts[2:])  # Обработка переводчика с тире
+
+    except (IndexError, ValueError) as e:
+        return JSONResponse(
+            {"status": "error", "message": f"Invalid file name format: {str(e)}"},
+            status_code=400,
+        )
+
+    # Читаем файл
     article_file = await excel_file.read()
     data = pd.read_excel(io.BytesIO(article_file))
+
     try:
         article_description = data["description"][0]
-    except Exception:
+    except KeyError:
         article_description = "Отсутствует"
+
+    # Обработка данных
     processed_data = preprocess_excel_article(data)
     res = make_article(processed_data)
+
     created = await create_article(
         Article(
             title=article_title,
             content=res["article_content"],
             tags=[],
             author=article_author,
+            translator=article_translator,  # Добавлено поле переводчика
             content_indexes=res["list_indexes"],
             description=article_description,
         )
@@ -117,6 +139,7 @@ async def create_article_from_excel(excel_file: UploadFile) -> JSONResponse:
     if created["status"] == "error":
         return JSONResponse(created)
 
+    # Создание комментариев
     list_of_comments = make_comments(
         data=processed_data, article_id=created["result"]["article_id"]
     )
@@ -124,9 +147,7 @@ async def create_article_from_excel(excel_file: UploadFile) -> JSONResponse:
     created_comments_batch = []
     for comment in list_of_comments:
         res = await add_comment(comment=comment)
-
         res = json.loads(res.body.decode("utf-8"))
-
         created_comments_batch.append(
             (
                 res["result"]["comment_id"],
@@ -140,17 +161,21 @@ async def create_article_from_excel(excel_file: UploadFile) -> JSONResponse:
             )
         )
 
+    # Вставка в PostgreSQL (без translator)
     insert_article_in_pg(
         article_id=created["result"]["article_id"],
         title=article_title,
         tags=[],
         date=datetime.now().strftime("%Y-%m-%d"),
         author=article_author,
+        # translator временно не передаем
         data=processed_data,
         article_description=article_description,
     )
 
     insert_comments_in_pg(comments_batch=created_comments_batch)
+
+    # TODO: Добавить поддержку translator в insert_article_in_pg
 
     result = ApiResult(
         status="ok", result={"article_id": created["result"]["article_id"]}
