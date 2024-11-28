@@ -12,11 +12,18 @@ from api.routes import article, comment, authors
 
 
 fake_users_db = {
-    "admin": {
-        "username": "admin",
-        "full_name": "admin",
+    # "admin": {
+    #     "username": "admin",
+    #     "full_name": "admin",
+    #     "email": "admin@admin.com",
+    #     "hashed_password": "fakehashedlogos",
+    #     "disabled": False,
+    # },
+     "sophocles": {
+        "username": "sophocles",
+        "full_name": "sophocles",
         "email": "admin@admin.com",
-        "hashed_password": "fakehashedadmin",
+        "hashed_password": "fakehashedlogos",
         "disabled": False,
     },
     "alice": {
